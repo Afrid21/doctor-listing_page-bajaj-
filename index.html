@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Doctor Listing</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 1rem;
+      background: #f9f9f9;
+    }
+    .search-bar input {
+      width: 100%;
+      padding: 10px;
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+    .suggestions {
+      border: 1px solid #ccc;
+      max-width: 300px;
+      background: white;
+      position: absolute;
+      z-index: 2;
+    }
+    .suggestions div {
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+    .suggestions div:hover {
+      background-color: #eee;
+    }
+    .filters, .sort {
+      margin: 20px 0;
+    }
+    .doctor-card {
+      background: white;
+      border: 1px solid #ccc;
+      padding: 15px;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="search-bar">
+    <input data-testid="autocomplete-input" type="text" id="search" placeholder="Search doctor by name" />
+    <div class="suggestions" id="suggestions"></div>
+  </div>
+
+  <div class="filters">
+    <h3 data-testid="filter-header-moc">Consultation Mode</h3>
+    <label><input data-testid="filter-video-consult" type="radio" name="mode" value="Video Consult" /> Video Consult</label><br>
+    <label><input data-testid="filter-in-clinic" type="radio" name="mode" value="In Clinic" /> In Clinic</label>
+
+    <h3 data-testid="filter-header-speciality">Speciality</h3>
+    <div id="specialties-container"></div>
+  </div>
+
+  <div class="sort">
+    <h3 data-testid="filter-header-sort">Sort</h3>
+    <label><input data-testid="sort-fees" type="radio" name="sort" value="fees" /> Fees (Low to High)</label><br>
+    <label><input data-testid="sort-experience" type="radio" name="sort" value="experience" /> Experience (High to Low)</label>
+  </div>
+
+  <div id="doctor-list"></div>
+
+  <script>
+    const apiUrl = 'https://srijandubey.github.io/campus-api-mock/SRM-C1-25.json';
+    let doctors = [], filteredDoctors = [];
+
+    const searchInput = document.getElementById('search');
+    const suggestionsDiv = document.getElementById('suggestions');
+    const doctorList = document.getElementById('doctor-list');
+    const specialtiesContainer = document.getElementById('specialties-container');
+
+    const specialties = [
+      'General Physician', 'Dentist', 'Dermatologist', 'Paediatrician', 'Gynaecologist',
+      'ENT', 'Diabetologist', 'Cardiologist', 'Physiotherapist', 'Endocrinologist',
+      'Orthopaedic', 'Ophthalmologist', 'Gastroenterologist', 'Pulmonologist',
+      'Psychiatrist', 'Urologist', 'Dietitian/Nutritionist', 'Psychologist',
+      'Sexologist', 'Nephrologist', 'Neurologist', 'Oncologist', 'Ayurveda', 'Homeopath'
+    ];
+
+    specialties.forEach(spec => {
+      const id = `filter-specialty-${spec.replace(/\//g, '-').replace(/\s/g, '-')}`;
+      specialtiesContainer.innerHTML += `
+        <label><input data-testid="${id}" type="checkbox" name="specialty" value="${spec}" /> ${spec}</label><br>
+      `;
+    });
+
+    function renderDoctors(list) {
+      doctorList.innerHTML = '';
+      list.forEach(doc => {
+        const card = document.createElement('div');
+        card.className = 'doctor-card';
+        card.setAttribute('data-testid', 'doctor-card');
+
+        card.innerHTML = `
+          <h2 data-testid="doctor-name">${doc.name}</h2>
+          <p data-testid="doctor-specialty">Specialties: ${doc.specialties.join(', ')}</p>
+          <p data-testid="doctor-experience">Experience: ${doc.experience} years</p>
+          <p data-testid="doctor-fee">Fees: Rs. ${doc.fees}</p>
+        `;
+
+        doctorList.appendChild(card);
+      });
+    }
+
+    function applyFilters() {
+      const searchQuery = searchInput.value.toLowerCase();
+      const mode = document.querySelector('input[name="mode"]:checked')?.value;
+      const selectedSpecialties = [...document.querySelectorAll('input[name="specialty"]:checked')].map(el => el.value);
+      const sortBy = document.querySelector('input[name="sort"]:checked')?.value;
+
+      filteredDoctors = doctors.filter(doc => {
+        const matchesSearch = doc.name.toLowerCase().includes(searchQuery);
+        const matchesMode = !mode || doc.mode === mode;
+        const matchesSpecialty = selectedSpecialties.length === 0 || selectedSpecialties.some(spec => doc.specialties.includes(spec));
+        return matchesSearch && matchesMode && matchesSpecialty;
+      });
+
+      if (sortBy === 'fees') {
+        filteredDoctors.sort((a, b) => a.fees - b.fees);
+      } else if (sortBy === 'experience') {
+        filteredDoctors.sort((a, b) => b.experience - a.experience);
+      }
+
+      renderDoctors(filteredDoctors);
+    }
+
+    searchInput.addEventListener('input', () => {
+      const query = searchInput.value.toLowerCase();
+      if (!query) return suggestionsDiv.innerHTML = '';
+      const suggestions = doctors.filter(d => d.name.toLowerCase().includes(query)).slice(0, 3);
+
+      suggestionsDiv.innerHTML = suggestions.map(doc => `<div class="suggestion" data-testid="suggestion-item">${doc.name}</div>`).join('');
+    });
+
+    suggestionsDiv.addEventListener('click', e => {
+      if (e.target.classList.contains('suggestion')) {
+        searchInput.value = e.target.textContent;
+        suggestionsDiv.innerHTML = '';
+        applyFilters();
+      }
+    });
+
+    searchInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        suggestionsDiv.innerHTML = '';
+        applyFilters();
+      }
+    });
+
+    document.querySelectorAll('input').forEach(input => {
+      input.addEventListener('change', applyFilters);
+    });
+
+    fetch(apiUrl)
+      .then(res => res.json())
+      .then(data => {
+        doctors = data;
+        filteredDoctors = [...doctors];
+        renderDoctors(filteredDoctors);
+      });
+  </script>
+</body>
+</html>
